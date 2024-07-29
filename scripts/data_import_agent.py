@@ -106,7 +106,7 @@ def calc_stats(df_t):
 
     df_c = pd.DataFrame(data=a, columns=["cycle_index"])
 
-    df_c['cell_id'] = df_t['cell_id']
+    df_c['parent_id'] = df_t['parent_id']
     df_c['cycle_index'] = 0
     df_c['v_max'] = 0
     df_c['i_max'] = 0
@@ -125,7 +125,7 @@ def calc_stats(df_t):
     for c_ind in df_c.index:
         x = c_ind + 1
 
-        df_f = df_t[df_t['cycle_index'] == x]
+        df_f = df_t[df_t['cycle_index'] == x].copy()
 
         df_f['ah_c'] = 0
         df_f['e_c'] = 0
@@ -217,7 +217,7 @@ def read_timeseries_arbin(cell_id, file_path):
     if df_file.empty:
         return
 
-    df_file['cell_id'] = cell_id
+    df_file['parent_id'] = cell_id
 
     df_tmerge = pd.DataFrame()
 
@@ -253,7 +253,7 @@ def read_timeseries_arbin(cell_id, file_path):
                     df_time_series['e_c'] = 0
                     df_time_series['ah_d'] = 0
                     df_time_series['e_d'] = 0
-                    df_time_series['cell_id'] = cell_id
+                    df_time_series['parent_id'] = cell_id
                     df_time_series['cycle_index'] = 0
                     df_time_series['cycle_time'] = 0
 
@@ -343,7 +343,7 @@ def read_save_timeseries_arbin(cell_id, file_path, engine, conn):
                         df_time_series['i'] = df_time_series_file['Current(A)']
                         df_time_series['v'] = df_time_series_file['Voltage(V)']
                         df_time_series['date_time'] = df_time_series_file['Date_Time']
-                        df_time_series['cell_id'] = cell_id
+                        df_time_series['parent_id'] = cell_id
                         df_time_series['sheetname'] = filename + "|" + timeseries
 
                         cycle_index_file_max = df_time_series.cycle_index.max()
@@ -768,7 +768,7 @@ def clear_buffer(cell_id, conn):
     db_conn = psycopg2.connect(conn)
     curs = db_conn.cursor()
 
-    curs.execute("delete from cycle_timeseries_buffer where cell_id='" + cell_id + "'")
+    curs.execute("delete from cycle_timeseries_buffer where parent_id='" + cell_id + "'")
 
     db_conn.commit()
     curs.close()
@@ -794,7 +794,7 @@ def set_cell_status(cell_id, status, conn):
 def get_cycle_index_max(cell_id,conn):
 
 
-    sql_str = "select max(cycle_index)::int as max_cycles from cycle_timeseries_buffer where cell_id = '" + cell_id + "'"
+    sql_str = "select max(cycle_index)::int as max_cycles from cycle_timeseries_buffer where parent_id = '" + cell_id + "'"
 
     db_conn = psycopg2.connect(conn)
     curs = db_conn.cursor()
@@ -820,7 +820,7 @@ def get_cycle_index_max(cell_id,conn):
 def get_cycle_stats_index_max(cell_id,conn):
 
 
-    sql_str = "select max(cycle_index)::int as max_cycles from cycle_stats where cell_id = '" + cell_id + "'"
+    sql_str = "select max(cycle_index)::int as max_cycles from cycle_stats where parent_id = '" + cell_id + "'"
 
     db_conn = psycopg2.connect(conn)
     curs = db_conn.cursor()
@@ -846,7 +846,7 @@ def check_cell_status(cell_id,conn):
 
     status = 'new'
 
-    sql_str = "select * from cell_metadata where cell_id = '" + cell_id + "'"
+    sql_str = "select * from cell_metadata where parent_id = '" + cell_id + "'"
 
     db_conn = psycopg2.connect(conn)
     curs = db_conn.cursor()
@@ -868,7 +868,7 @@ def check_cell_status(cell_id,conn):
 
 def buffered_sheetnames(cell_id, conn):
 
-    sql_str = "select distinct sheetname from cycle_timeseries_buffer where cell_id = '" + cell_id + "'"
+    sql_str = "select distinct sheetname from cycle_timeseries_buffer where parent_id = '" + cell_id + "'"
 
     db_conn = psycopg2.connect(conn)
     curs = db_conn.cursor()
@@ -1136,7 +1136,7 @@ def add_ts_md_cycle(cell_list, conn, save, plot, path, slash):
                     start_cycle = i
                     end_cycle = start_cycle + block_size - 1
 
-                    sql_cell =  " cell_id='" + cell_id + "'" 
+                    sql_cell =  " parent_id='" + cell_id + "'" 
                     sql_cycle = " and cycle_index>=" + str(start_cycle) + " and cycle_index<=" + str(end_cycle)
                     sql_str = "select * from cycle_timeseries_buffer where " + sql_cell + sql_cycle + " order by test_time"
 
@@ -1186,7 +1186,7 @@ def generate_cycle_data(cell_id, conn, path):
         round(ah_d,3) as "Discharge_Capacity (Ah)", 
         round(e_c,3) as "Charge_Energy (Wh)", 
         round(e_d,3)  as "Discharge_Energy (Wh)" 
-      from cycle_stats where cell_id='""" + cell_id + """' order by cycle_index"""
+      from cycle_stats where parent_id='""" + cell_id + """' order by cycle_index"""
 
     print(sql_str)
 
@@ -1216,7 +1216,7 @@ def generate_timeseries_data(cell_id, conn, path):
           round(e_d,3) as "Discharge_Energy (Wh)",
           round(env_temperature,3) as "Environment_Temperature (C)",
           round(cell_temperature,3) as "Cell_Temperature (C)"
-      from cycle_timeseries where cell_id='""" + cell_id + """' order by test_time"""
+      from cycle_timeseries where parent_id='""" + cell_id + """' order by test_time"""
 
     print(sql_str)
 
