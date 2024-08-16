@@ -21,7 +21,7 @@ metadata_obj = MetaData()
 def get_cycle_index_max(cell_id,engine):
     buffer_table = Table("cycle_timeseries_buffer", metadata_obj, autoload_with=engine)
 
-    stmt = select(func.max(buffer_table.c.cycle_index).label("max_cycles")).where(buffer_table.c.parent_id == cell_id)
+    stmt = select(func.max(buffer_table.c.cycle_index).label("max_cycles")).where(buffer_table.c.cell_id == cell_id)
     with engine.connect() as conn:
         result = conn.execute(stmt).first()
         conn.commit()
@@ -37,7 +37,7 @@ def get_cycle_index_max(cell_id,engine):
 def get_cycle_stats_index_max(cell_id,engine):
     cycle_stats_table = Table("cycle_stats", metadata_obj, autoload_with=engine)
 
-    stmt = select(func.max(cycle_stats_table.c.cycle_index).label("max_cycles")).where(cycle_stats_table.c.parent_id == cell_id)
+    stmt = select(func.max(cycle_stats_table.c.cycle_index).label("max_cycles")).where(cycle_stats_table.c.cell_id == cell_id)
     with engine.connect() as conn:
         result = conn.execute(stmt).first()
         conn.commit()
@@ -156,7 +156,7 @@ def calc_stats(df_t):
 
     df_c = pd.DataFrame(data=a, columns=["cycle_index"], dtype=float)
 
-    df_c['parent_id'] = df_t['parent_id']
+    df_c['cell_id'] = df_t['cell_id']
     df_c['cycle_index'] = 0
     df_c['v_max'] = 0
     df_c['i_max'] = 0
@@ -243,7 +243,7 @@ def calc_stats(df_t):
 def clear_buffer(cell_id, engine):
     # Remove all data from the buffer table for the given parent id
     buffer_table = Table("cycle_timeseries_buffer", metadata_obj, autoload_with=engine)
-    stmt = delete(buffer_table).where(buffer_table.c.parent_id==cell_id)
+    stmt = delete(buffer_table).where(buffer_table.c.cell_id==cell_id)
     with engine.connect() as conn:
         conn.execute(stmt)
 
@@ -356,9 +356,11 @@ def import_module_data_into_buffer(df_configuration: pd.DataFrame, df_module_dat
         df_cell_data = pd.DataFrame()
         if row["Type"] == "Module":
             cell_id = module_id
+            measurement_level = "module"
             if get_module_status(module_id, engine) != "buffering":
                 continue
         else:
+            measurement_level = "cell"
             if get_cell_status(cell_id, engine) != "buffering":
                 continue
         if row["Voltage column"]:
@@ -372,7 +374,8 @@ def import_module_data_into_buffer(df_configuration: pd.DataFrame, df_module_dat
         df_cell_data["date_time"] = df_module_data[row["Timestamp column"]]
         df_cell_data["test_time"] = df_module_data[row["Test time column"]]
         df_cell_data["cycle_index"] = df_module_data[row["Cycle index column"]]
-        df_cell_data["parent_id"] = cell_id
+        df_cell_data["cell_id"] = cell_id
+        df_cell_data["measurement_level"] = measurement_level
         clear_buffer(cell_id, engine)
         df_cell_data.to_sql('cycle_timeseries_buffer', con=engine, if_exists='append', chunksize=1000, index=False)
         if row["Type"] == "Module":
@@ -392,12 +395,12 @@ def process_module_data(module_id, engine):
         clear_buffer(cell_id, engine)
         set_cell_status(cell_id, "completed", engine)
     if get_module_status(module_id, engine) == "processing":
-        process_cell_timeseries_data(module_id, engine)
+        process_cell_timeseries_data(module_id, engine, "module")
         clear_buffer(module_id, engine)
         set_module_status(module_id, "completed", engine)
 
 
-def process_cell_timeseries_data(cell_id, engine):
+def process_cell_timeseries_data(cell_id, engine, measurement_level="cell"):
     # read the data back in chunks.
     block_size = 30
 
@@ -418,7 +421,7 @@ def process_cell_timeseries_data(cell_id, engine):
             start_cycle = i
             end_cycle = start_cycle + block_size - 1
             query = select(buffer_table).where(
-                    buffer_table.c.parent_id == cell_id, 
+                    buffer_table.c.cell_id == cell_id, 
                     buffer_table.c.cycle_index >= start_cycle, 
                     buffer_table.c.cycle_index <= end_cycle
                 ).order_by(buffer_table.c.test_time)
@@ -431,6 +434,8 @@ def process_cell_timeseries_data(cell_id, engine):
             if not df_ts.empty:
                 start_time = time.time()
                 df_cycle_stats, df_cycle_timeseries = calc_stats(df_ts)
+                df_cycle_stats["measurement_level"] = measurement_level
+                df_cycle_timeseries["measurement_level"] = measurement_level
                 print("calc_stats time: " + str(time.time() - start_time))
                 logging.info("calc_stats time: " + str(time.time() - start_time))
 

@@ -1,0 +1,109 @@
+--The following are SQL commands to modify an existing database to the schema I am using and create two new views:
+
+ALTER TABLE cell_metadata ADD COLUMN parent_id text;
+ALTER TABLE cycle_timeseries ADD COLUMN is_load_balanced boolean;
+ALTER TABLE cycle_timeseries_buffer ADD COLUMN is_load_balanced boolean;
+
+ALTER TABLE cycle_stats ADD COLUMN component_level text;
+ALTER TABLE cycle_timeseries ADD COLUMN component_level text;
+ALTER TABLE cycle_timeseries_buffer ADD COLUMN component_level text;
+
+CREATE TABLE module_metadata (
+    index integer NOT NULL,
+    module_id text NOT NULL,
+    configuration text,
+    num_parallel integer,
+    num_series integer,
+    status text
+);
+
+CREATE SEQUENCE module_metadata_index_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER TABLE ONLY module_metadata ALTER COLUMN index SET DEFAULT nextval('module_metadata_index_seq'::regclass);
+
+ALTER TABLE ONLY module_metadata
+    ADD CONSTRAINT module_metadata_pkey PRIMARY KEY (index);
+
+CREATE VIEW cell_cycle_stats AS
+SELECT
+  v_max,
+  v_min,
+  ah_c,
+  ah_d,
+  e_c,
+  e_d,
+  i_max,
+  i_min,
+  v_c_mean,
+  v_d_mean,
+  e_eff,
+  ah_eff,
+  cycle_index,
+  test_time,
+  cell_id
+FROM cycle_stats
+WHERE component_level='cell’;
+
+CREATE VIEW module_cycle_stats AS
+SELECT
+  v_max,
+  v_min,
+  ah_c,
+  ah_d,
+  e_c,
+  e_d,
+  i_max,
+  i_min,
+  v_c_mean,
+  v_d_mean,
+  e_eff,
+  ah_eff,
+  cycle_index,
+  test_time,
+  cell_id “module_id”
+FROM cycle_stats
+WHERE component_level=‘module’;
+
+CREATE VIEW cell_timeseries AS
+SELECT
+  i,
+  v,
+  ah_c,
+  ah_d,
+  e_c,
+  e_d,
+  env_temperature,
+  cell_temperature,
+  cycle_time,
+  date_time,
+  cycle_index,
+  test_time,
+  cell_id "cell_id"
+FROM cycle_timeseries
+WHERE component_level='cell’;
+
+CREATE VIEW module_timeseries AS
+SELECT
+  i,
+  v,
+  ah_c,
+  ah_d,
+  e_c,
+  e_d,
+  env_temperature,
+  cell_temperature,
+  cycle_time,
+  date_time,
+  cycle_index,
+  test_time,
+  cell_id "module_id"
+FROM cycle_timeseries
+WHERE component_level='module’;
+
+
