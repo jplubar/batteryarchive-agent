@@ -356,11 +356,11 @@ def import_module_data_into_buffer(df_configuration: pd.DataFrame, df_module_dat
         df_cell_data = pd.DataFrame()
         if row["Type"] == "Module":
             cell_id = module_id
-            measurement_level = "module"
+            component_level = "module"
             if get_module_status(module_id, engine) != "buffering":
                 continue
         else:
-            measurement_level = "cell"
+            component_level = "cell"
             if get_cell_status(cell_id, engine) != "buffering":
                 continue
         if row["Voltage column"]:
@@ -375,7 +375,7 @@ def import_module_data_into_buffer(df_configuration: pd.DataFrame, df_module_dat
         df_cell_data["test_time"] = df_module_data[row["Test time column"]]
         df_cell_data["cycle_index"] = df_module_data[row["Cycle index column"]]
         df_cell_data["cell_id"] = cell_id
-        df_cell_data["measurement_level"] = measurement_level
+        df_cell_data["component_level"] = component_level
         clear_buffer(cell_id, engine)
         df_cell_data.to_sql('cycle_timeseries_buffer', con=engine, if_exists='append', chunksize=1000, index=False)
         if row["Type"] == "Module":
@@ -400,7 +400,7 @@ def process_module_data(module_id, engine):
         set_module_status(module_id, "completed", engine)
 
 
-def process_cell_timeseries_data(cell_id, engine, measurement_level="cell"):
+def process_cell_timeseries_data(cell_id, engine, component_level="cell"):
     # read the data back in chunks.
     block_size = 30
 
@@ -434,8 +434,8 @@ def process_cell_timeseries_data(cell_id, engine, measurement_level="cell"):
             if not df_ts.empty:
                 start_time = time.time()
                 df_cycle_stats, df_cycle_timeseries = calc_stats(df_ts)
-                df_cycle_stats["measurement_level"] = measurement_level
-                df_cycle_timeseries["measurement_level"] = measurement_level
+                df_cycle_stats["component_level"] = component_level
+                df_cycle_timeseries["component_level"] = component_level
                 print("calc_stats time: " + str(time.time() - start_time))
                 logging.info("calc_stats time: " + str(time.time() - start_time))
 
